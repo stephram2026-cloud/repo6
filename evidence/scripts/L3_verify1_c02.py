@@ -1,0 +1,41 @@
+from common import *
+s = suffix(); A = f"c2a{s}"; B = f"c2b{s}"; L = f"c2l{s}"
+mkusers(A, B, L)
+PA = mkproject(A, name=f"C2A-{s}"); PB = mkproject(B, name=f"C2B-{s}")
+role = mkrole(A, PA, "mover", ["view_project","view_milestones","modify_milestone","view_us","modify_us","view_tasks","modify_task","view_issues","modify_issue"])
+addm(A, PA, L, role=role["id"])
+SA = mkms(A, PA, "sprintA"); SB = mkms(B, PB, "sprintB")
+us = mkus(A, PA, "storyA", milestone=SA["id"])
+task = mktask(A, PA, "taskA", milestone=SA["id"])
+issue = mkissue(A, PA, "issueA", milestone=SA["id"])
+print(f"caller {L}: member of A (id {PA['id']}) with role perms {role['permissions']}; NOT a member of B (id {PB['id']})")
+print("caller GET sprint B:", api(L, "GET", f"/milestones/{SB['id']}").status_code)
+def state():
+    return shell(f"""
+from taiga.projects.userstories.models import UserStory as U
+from taiga.projects.tasks.models import Task as T
+from taiga.projects.issues.models import Issue as I
+u=U.objects.get(id={us['id']}); t=T.objects.get(id={task['id']}); i=I.objects.get(id={issue['id']})
+print('story: project', u.project_id, 'milestone', u.milestone_id, '(milestone project', u.milestone.project_id, ')')
+print('task : project', t.project_id, 'milestone', t.milestone_id, '(milestone project', t.milestone.project_id, ')')
+print('issue: project', i.project_id, 'milestone', i.milestone_id, '(milestone project', i.milestone.project_id, ')')
+""")
+print("BEFORE (sprintA id %d in A, sprintB id %d in B)" % (SA["id"], SB["id"])); print(state())
+print("-- userstories: project_id=A, milestone_id=sprintB")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_userstories_to_sprint", dict(project_id=PA["id"], milestone_id=SB["id"], bulk_stories=[{"us_id": us["id"], "order": 1}])))
+print("-- tasks: project_id=A, milestone_id=sprintB")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_tasks_to_sprint", dict(project_id=PA["id"], milestone_id=SB["id"], bulk_tasks=[{"task_id": task["id"], "order": 1}])))
+print("-- tasks: project_id=B, milestone_id=sprintB")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_tasks_to_sprint", dict(project_id=PB["id"], milestone_id=SB["id"], bulk_tasks=[{"task_id": task["id"], "order": 1}])))
+print("-- issues: project_id=A, milestone_id=sprintB")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_issues_to_sprint", dict(project_id=PA["id"], milestone_id=SB["id"], bulk_issues=[{"issue_id": issue["id"]}])))
+print("-- issues: project_id=B, milestone_id=sprintB")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_issues_to_sprint", dict(project_id=PB["id"], milestone_id=SB["id"], bulk_issues=[{"issue_id": issue["id"]}])))
+print("AFTER"); print(state())
+print("-- owner B now sees in sprint B:")
+r = api(B, "GET", f"/milestones/{SB['id']}"); print(r.status_code, [(u["id"], u["subject"], u["project"]) for u in r.json()["user_stories"]])
+print("-- same-project controls (sprintA2 in A) for tasks/issues, to show the endpoints work at all")
+SA2 = mkms(A, PA, "sprintA2", start="2026-02-01", finish="2026-02-15")
+show(api(L, "POST", f"/milestones/{SA['id']}/move_tasks_to_sprint", dict(project_id=PA["id"], milestone_id=SA2["id"], bulk_tasks=[{"task_id": task["id"], "order": 1}])))
+show(api(L, "POST", f"/milestones/{SA['id']}/move_issues_to_sprint", dict(project_id=PA["id"], milestone_id=SA2["id"], bulk_issues=[{"issue_id": issue["id"]}])))
+print(state())

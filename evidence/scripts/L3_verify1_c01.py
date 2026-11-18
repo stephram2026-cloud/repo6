@@ -1,0 +1,16 @@
+from common import *
+s = suffix(); A = f"c1a{s}"; X = f"c1x{s}"
+mkusers(A, X)
+P = mkproject(A, name=f"C1-{s}", is_private=True)
+print("project private:", P["is_private"], "anon_permissions:", P["anon_permissions"], "public_permissions:", P["public_permissions"])
+ep = mkepic(A, P, "secret epic"); us = mkus(A, P, "secret story")
+r = api(A, "POST", f"/epics/{ep['id']}/related_userstories", dict(epic=ep["id"], user_story=us["id"])); print("owner link:", r.status_code, r.text)
+print("-- control: anonymous / outsider on the epic itself")
+show(api(None, "GET", f"/epics/{ep['id']}")); show(api(X, "GET", f"/epics/{ep['id']}"))
+show(api(None, "GET", f"/epics?project={P['id']}")); show(api(None, "GET", f"/userstories/{us['id']}"))
+print("-- claim: list related_userstories")
+show(api(None, "GET", f"/epics/{ep['id']}/related_userstories"))
+show(api(X, "GET", f"/epics/{ep['id']}/related_userstories"))
+print("-- retrieve one")
+show(api(None, "GET", f"/epics/{ep['id']}/related_userstories/{us['id']}"))
+show(api(X, "GET", f"/epics/{ep['id']}/related_userstories/{us['id']}"))
